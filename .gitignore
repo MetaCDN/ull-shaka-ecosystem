@@ -1,0 +1,9 @@
+# ignore dependencies
+depot_tools/
+low-latency-preview/
+s3-upload-proxy/
+shaka-packager/
+shaka-streamer/
+
+# virtual environment created while puring AWS MediaStore container
+demos/server/env/
