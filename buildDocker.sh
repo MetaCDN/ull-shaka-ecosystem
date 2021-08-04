@@ -1,33 +1,37 @@
 #!/bin/bash
 
-# Default build for same as local host
-ARCH=$(uname -m)
-
 # comment/uncomment this wanting to build ARM64 on Intel
 ARCH=aarch64
-#ARCH=x86_64
 
 # http://127.0.0.1:PORT/testpattern/dash.mpd
 PORT=80
 
 HERE=$PWD
+HOST_ARCH=$(uname -m)
 
-if [[ $ARCH == "aarch64" ]]; then
-  # arm64
-  IMAGE_STATE=$(docker images -q shaka_builder_arm:latest 2> /dev/null)
+if [[ $ARCH == "aarch64" ]] && [[ $HOST_ARCH != "aarch64" ]]; then
+  echo "Crosscompiling $ARCH from $HOST_ARCH"
+
+  # arm64 cross compile
+  IMAGE_STATE=$(docker images -q shaka_builder_crosscompile:latest 2> /dev/null)
 
   create_docker_image () {
     if [[ "$IMAGE_STATE" == "" ]]; then
       echo "Building"
-        docker buildx build --platform linux/arm64 -t shaka_builder_arm .
+        docker buildx build --platform linux/arm64 --build-arg PASS_GENERATE_YOUR_PROJECT_DEFINES="clang=0 use_allocator=none" -t shaka_builder_crosscompile .
     fi
   }
 
   run_docker_container () {
-    docker run --rm -it -p $PORT:80/tcp -v "$(pwd):/host" shaka_builder_arm bash -c "/bin/bash"
+    # copy for native deploy to Jetson
+    # docker run --platform linux/arm64 --rm -it -v "$(pwd):/host" shaka_builder_crosscompile bash -c "cp -r /root/ull-shaka-ecosystem /host && chown $(id -u):$(id -g) /host/*"
+    docker run --platform linux/arm64 --rm -it -v "$(pwd):/host" shaka_builder_crosscompile bash
+
   }
 else
-  # x86_64
+  echo "Native compile for $HOST_ARCH"
+
+  # native compile
   IMAGE_STATE=$(docker images -q shaka_builder:latest 2> /dev/null)
 
   create_docker_image () {

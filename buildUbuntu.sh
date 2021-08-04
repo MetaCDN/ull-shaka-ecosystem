@@ -1,13 +1,13 @@
 #!/bin/bash
 
-ARCH=$(uname -m)
+export ARCH=$(uname -m)
 
-GOLANG_ARCH=amd64
-SHAKA_PACKAGER_SOURCE="CaitlinOCallaghan"
+export GOLANG_ARCH=amd64
+export SHAKA_PACKAGER_SOURCE="CaitlinOCallaghan"
+export SHAKA_PACKAGER_COMMIT="45e92b4b9fdfdcb6842f891886d09f52ecb2ef73"
+
 if [[ $ARCH == "aarch64" ]]; then
-  GYP_DEFINES="clang=0 use_allocator=none"
-  GOLANG_ARCH=arm64
-  SHAKA_PACKAGER_SOURCE="kevleyski" # TODO: KJSL: waiting on write access to Caitlinks shaka packager
+  export GOLANG_ARCH=arm64
 fi
 
 # Server build script for Ubuntu 20.04
@@ -21,8 +21,8 @@ sudo apt-get -y install \
   build-essential \
   cmake \
   curl \
-  ffmpeg \
   git \
+  htop \
   libncurses5 \
   libnginx-mod-http-dav-ext \
   libssl-dev \
@@ -36,21 +36,27 @@ sudo apt-get -y install \
   python \
   python3-pip \
   tclsh \
+  terminator \
   wget 
+
+if [[ $ARCH == "x86_64" ]]; then
+  sudo apt-get -y install ffmpeg
+fi
 
 sudo chown -R "$USER" /var/www/
 sudo chmod 755 -R /var/www/
 
-# Shaka Packager with HTTP upload
+# Shaka Packager with LL-DASH support
 git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
 export PATH="$PATH:$PWD/depot_tools"
 mkdir shaka-packager
 cd shaka-packager
 # grab the fork that contains ULL work
 gclient config "https://github.com/$SHAKA_PACKAGER_SOURCE/shaka-packager.git" --name=src --unmanaged
-# checkout the main branch
-# NOTE: use "gclinet sync -r {commit_hash}" to checkout a specific commit or branch
-gclient sync
+# checkout the LL-DASH branch
+# NOTE: use "gclient sync -r {commit_hash}" to checkout a specific commit or branch
+# otherwise, use "gclient sync" to checkout the main branch
+gclient sync -r ${SHAKA_PACKAGER_COMMIT}
 cd src
 # build shaka packager
 ninja -C out/Release
@@ -73,8 +79,15 @@ cd ..
 
 # install go - a dependency for s3-upload-proxy
 wget "https://golang.org/dl/go1.15.5.linux-$GOLANG_ARCH.tar.gz"
-sudo tar -C /usr/local -xzf "go1.15.5.linux-GOLANG_ARCH.tar.gz"
+sudo tar -C /usr/local -xzf "go1.15.5.linux-$GOLANG_ARCH.tar.gz"
 export PATH=$PATH:/usr/local/go/bin
 sudo install -m 755 /usr/local/go/bin/go  /usr/local/bin/go
 go version
 
+# install low-latency-preview which contains a ULL server
+git clone https://github.com/CaitlinOCallaghan/low-latency-preview.git
+cd low-latency-preview
+# checkout branch containing ARM support
+git checkout arm-support
+./buildEncoderAndServerArm.sh
+cd ..
